@@ -93,15 +93,11 @@ export class MutatorInterface {
    * first argument to this method and all the mutation work should be done
    * in the mutator callback which is called in the "mutation" vsync phase.
    *
-   * By default, all mutations force a remeasure. If you know that a mutation
-   * cannot cause a change to the layout, you may use the skipRemeasure arg.
-   *
    * @param {!Element} element
    * @param {function()} mutator
-   * @param {boolean=} skipRemeasure
    * @return {!Promise}
    */
-  mutateElement(element, mutator, skipRemeasure) {}
+  mutateElement(element, mutator) {}
 
   /**
    * Runs the specified mutation on the element and ensures that remeasures and

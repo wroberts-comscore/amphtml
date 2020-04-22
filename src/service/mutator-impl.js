@@ -164,13 +164,8 @@ export class MutatorImpl {
   }
 
   /** @override */
-  mutateElement(element, mutator, skipRemeasure) {
-    return this.measureMutateElementResources_(
-      element,
-      null,
-      mutator,
-      skipRemeasure
-    );
+  mutateElement(element, mutator) {
+    return this.measureMutateElement(element, null, mutator);
   }
 
   /** @override */
@@ -200,15 +195,9 @@ export class MutatorImpl {
    * @param {!Element} element
    * @param {?function()} measurer
    * @param {function()} mutator
-   * @param {boolean} skipRemeasure
    * @return {!Promise}
    */
-  measureMutateElementResources_(
-    element,
-    measurer,
-    mutator,
-    skipRemeasure = false
-  ) {
+  measureMutateElementResources_(element, measurer, mutator) {
     const calcRelayoutTop = () => {
       const box = this.viewport_.getLayoutRect(element);
       if (box.width != 0 && box.height != 0) {
@@ -231,9 +220,6 @@ export class MutatorImpl {
       },
       mutate: () => {
         mutator();
-        if (skipRemeasure) {
-          return;
-        }
 
         // TODO(willchou): toggleLoading() mutate causes a lot of unnecessary
         // remeasures. Add affordance to mutateElement() to disable remeasures.
