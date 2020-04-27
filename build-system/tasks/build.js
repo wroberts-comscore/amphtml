@@ -17,7 +17,7 @@
 const log = require('fancy-log');
 const {
   bootstrapThirdPartyFrames,
-  compileAllJs,
+  compileAllUnminifiedJs,
   compileCoreRuntime,
   printConfigHelp,
   printNobuildHelp,
@@ -29,7 +29,7 @@ const {
 const {buildExtensions} = require('./extension-helpers');
 const {compileCss} = require('./css');
 const {compileJison} = require('./compile-jison');
-const {cyan, green, yellow} = require('ansi-colors');
+const {cyan, green} = require('ansi-colors');
 const {doServe} = require('./serve');
 const {maybeUpdatePackages} = require('./update-packages');
 const {parseExtensionFlags} = require('./extension-helpers');
@@ -37,48 +37,24 @@ const {parseExtensionFlags} = require('./extension-helpers');
 const argv = require('minimist')(process.argv.slice(2));
 
 /**
- * Deprecated. Use `gulp build --watch` or `gulp dist --watch`.
- *
- * TODO(rsimha, #27471): Remove this after several weeks.
+ * Enables watching for file changes in css, extensions.
+ * @return {!Promise}
  */
 async function watch() {
-  log(yellow('WARNING:'), cyan('gulp watch'), 'has been deprecated.');
-  log(
-    green('INFO:'),
-    'Use',
-    cyan('gulp build --watch'),
-    'or',
-    cyan('gulp dist --watch'),
-    'instead.'
-  );
-  log(
-    green('INFO:'),
-    'Run',
-    cyan('gulp help'),
-    'for a full list of commands and flags.'
-  );
+  maybeUpdatePackages();
+  createCtrlcHandler('watch');
+  await performBuild(/* watch */ true);
 }
 
 /**
- * Unminified build. Entry point for `gulp build`.
+ * Main build
+ * @return {!Promise}
  */
 async function build() {
   maybeUpdatePackages();
   const handlerProcess = createCtrlcHandler('build');
-  process.env.NODE_ENV = 'development';
-  printNobuildHelp();
-  printConfigHelp('gulp build');
-  parseExtensionFlags();
-  await performPrerequisiteSteps(argv.watch);
-  if (argv.core_runtime_only) {
-    await compileCoreRuntime(argv.watch, /* minify */ false);
-  } else {
-    await compileAllJs(/* minify */ false);
-    await buildExtensions({watch: argv.watch});
-  }
-  if (!argv.watch) {
-    exitCtrlcHandler(handlerProcess);
-  }
+  await performBuild();
+  return exitCtrlcHandler(handlerProcess);
 }
 
 /**
@@ -94,8 +70,7 @@ function printDefaultTaskHelp() {
 }
 
 /**
- * Performs the pre-requisite build steps for gulp and gulp build
- *
+ * Performs the pre-requisite build steps for gulp, gulp build, and gulp watch
  * @param {boolean} watch
  * @return {!Promise}
  */
@@ -106,8 +81,26 @@ async function performPrerequisiteSteps(watch) {
 }
 
 /**
+ * Performs the build steps for gulp build and gulp watch
+ * @param {boolean} watch
+ * @return {!Promise}
+ */
+async function performBuild(watch) {
+  process.env.NODE_ENV = 'development';
+  printNobuildHelp();
+  printConfigHelp(watch ? 'gulp watch' : 'gulp build');
+  parseExtensionFlags();
+  await performPrerequisiteSteps(watch);
+  if (argv.core_runtime_only) {
+    await compileCoreRuntime(watch, /* minify */ false);
+  } else {
+    await compileAllUnminifiedJs(watch);
+    await buildExtensions({watch});
+  }
+}
+
+/**
  * The default task run when `gulp` is executed
- *
  * @return {!Promise}
  */
 async function defaultTask() {
@@ -141,19 +134,28 @@ build.flags = {
   coverage: '  Adds code coverage instrumentation to JS files using istanbul.',
   version_override: '  Overrides the version written to AMP_CONFIG',
   custom_version_mark: '  Set final digit (0-9) on auto-generated version',
-  watch: '  Watches for changes in files, re-builds when detected',
 };
 
-watch.description = 'Deprecated. Use gulp build --watch or gulp dist --watch';
+watch.description = 'Watches for changes in files, re-builds when detected';
+watch.flags = {
+  config: '  Sets the runtime\'s AMP_CONFIG to one of "prod" or "canary"',
+  extensions: '  Watches and builds only the listed extensions.',
+  extensions_from:
+    '  Watches and builds only the extensions from the listed AMP(s).',
+  noextensions: '  Watches and builds with no extensions.',
+  core_runtime_only: '  Watches and builds only the core runtime.',
+  version_override: '  Overrides the version written to AMP_CONFIG',
+  custom_version_mark: '  Set final digit (0-9) on auto-generated version',
+};
 
 defaultTask.description =
-  'Starts the dev server, lazily builds JS and extensions when requested, and watches them for changes';
+  'Starts the dev server and lazily builds JS and extensions when requested';
 defaultTask.flags = {
-  compiled: '  Compiles and serves minified binaries',
   config: '  Sets the runtime\'s AMP_CONFIG to one of "prod" or "canary"',
-  extensions: '  Pre-builds the given extensions, lazily builds the rest.',
+  extensions: '  Watches and builds only the listed extensions.',
   extensions_from:
-    '  Pre-builds the extensions used by the provided example page.',
+    '  Watches and builds only the extensions from the listed AMP(s).',
+  noextensions: '  Watches and builds with no extensions.',
   version_override: '  Overrides the version written to AMP_CONFIG',
   custom_version_mark: '  Set final digit (0-9) on auto-generated version',
 };

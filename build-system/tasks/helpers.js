@@ -40,7 +40,6 @@ const {
 const {altMainBundles, jsBundles} = require('../compile/bundles.config');
 const {applyConfig, removeConfig} = require('./prepend-global/index.js');
 const {closureCompile} = require('../compile/compile');
-const {EventEmitter} = require('events');
 const {isTravisBuild} = require('../common/travis');
 const {thirdPartyFrames} = require('../test-configs/config');
 const {transpileTs} = require('../compile/typescript');
@@ -122,6 +121,25 @@ const hostname = argv.hostname || 'cdn.ampproject.org';
 const hostname3p = argv.hostname3p || '3p.ampproject.net';
 
 /**
+ * Compile JS in minified mode and drop them in dist/.
+ * @return {!Promise}
+ */
+function compileAllMinifiedJs() {
+  log('Minifying multi-pass JS with', cyan('closure-compiler') + '...');
+  return compileAllJs(/* watch */ false, /* minify */ true);
+}
+
+/**
+ * Compile JS in unminified mode and drop them in dist/.
+ * @param {boolean} watch
+ * @return {!Promise}
+ */
+function compileAllUnminifiedJs(watch) {
+  log('Compiling JS with', cyan('browserify') + '...');
+  return compileAllJs(/* watch */ watch);
+}
+
+/**
  * @param {!Object} jsBundles
  * @param {string} name
  * @param {?Object} extraOptions
@@ -190,18 +208,12 @@ async function compileCoreRuntime(watch, minify) {
 /**
  * Compile and optionally minify the stylesheets and the scripts for the runtime
  * and drop them in the dist folder
- *
+ * @param {boolean} watch
  * @param {boolean} minify
  * @return {!Promise}
  */
-async function compileAllJs(minify) {
-  if (minify) {
-    log('Minifying multi-pass JS with', cyan('closure-compiler') + '...');
-  } else {
-    log('Compiling JS with', cyan('browserify') + '...');
-  }
+async function compileAllJs(watch, minify) {
   const startTime = Date.now();
-  const {watch} = argv;
   await Promise.all([
     minify ? Promise.resolve() : doBuildJs(jsBundles, 'polyfills.js', {watch}),
     doBuildJs(jsBundles, 'alp.max.js', {watch, minify}),
@@ -277,70 +289,48 @@ async function compileMinifiedJs(srcDir, srcFilename, destDir, options) {
   const timeInfo = {};
   const entryPoint = path.join(srcDir, srcFilename);
   const minifiedName = maybeToEsmName(options.minifiedName);
+  await closureCompile(entryPoint, destDir, minifiedName, options, timeInfo);
 
-  if (options.watch) {
-    gulpWatch(entryPoint, async function() {
-      const compileComplete = await doCompileMinifiedJs(
-        /* continueOnError */ true
-      );
-      if (options.onWatchBuild) {
-        options.onWatchBuild(compileComplete);
-      }
-    });
-  }
-
-  async function doCompileMinifiedJs(continueOnError) {
-    options.continueOnError = continueOnError;
-    options.errored = false;
-    await closureCompile(entryPoint, destDir, minifiedName, options, timeInfo);
-
-    // If an incremental watch build fails, simply return.
-    if (options.errored) {
-      return;
-    }
-
-    const destPath = path.join(destDir, minifiedName);
-    appendToCompiledFile(srcFilename, destPath);
-    fs.writeFileSync(path.join(destDir, 'version.txt'), internalRuntimeVersion);
-    if (options.latestName) {
-      fs.copySync(
-        destPath,
-        path.join(destDir, maybeToEsmName(options.latestName))
-      );
-    }
-
-    let name = minifiedName;
-    if (options.latestName) {
-      name += ` → ${maybeToEsmName(options.latestName)}`;
-    }
-    if (options.singlePassCompilation) {
-      altMainBundles.forEach(bundle => {
-        name += `, ${maybeToEsmName(`${bundle.name}.js`)}`;
-      });
-      name += ', and all extensions';
-    }
-    endBuildStep('Minified', name, timeInfo.startTime);
-
-    if (!argv.noconfig && MINIFIED_TARGETS.includes(minifiedName)) {
-      await applyAmpConfig(
-        maybeToEsmName(`${destDir}/${minifiedName}`),
-        /* localDev */ !!argv.fortesting
-      );
-    }
-
-    if (argv.noconfig || !options.singlePassCompilation) {
-      return;
-    }
-    return await Promise.all(
-      altMainBundles.map(({name}) =>
-        applyAmpConfig(
-          maybeToEsmName(`dist/${name}.js`),
-          /* localDev */ !!argv.fortesting
-        )
-      )
+  const destPath = path.join(destDir, minifiedName);
+  appendToCompiledFile(srcFilename, destPath);
+  fs.writeFileSync(path.join(destDir, 'version.txt'), internalRuntimeVersion);
+  if (options.latestName) {
+    fs.copySync(
+      destPath,
+      path.join(destDir, maybeToEsmName(options.latestName))
     );
   }
-  await doCompileMinifiedJs(options.continueOnError);
+
+  let name = minifiedName;
+  if (options.latestName) {
+    name += ` → ${maybeToEsmName(options.latestName)}`;
+  }
+  if (options.singlePassCompilation) {
+    altMainBundles.forEach(bundle => {
+      name += `, ${maybeToEsmName(`${bundle.name}.js`)}`;
+    });
+    name += ', and all extensions';
+  }
+  endBuildStep('Minified', name, timeInfo.startTime);
+
+  if (!argv.noconfig && MINIFIED_TARGETS.includes(minifiedName)) {
+    await applyAmpConfig(
+      maybeToEsmName(`${destDir}/${minifiedName}`),
+      /* localDev */ !!argv.fortesting
+    );
+  }
+
+  if (argv.noconfig || !options.singlePassCompilation) {
+    return;
+  }
+  return await Promise.all(
+    altMainBundles.map(({name}) =>
+      applyAmpConfig(
+        maybeToEsmName(`dist/${name}.js`),
+        /* localDev */ !!argv.fortesting
+      )
+    )
+  );
 }
 
 /**
@@ -355,14 +345,11 @@ function handleBundleError(err, continueOnError, destFilename) {
     // Drop the node_modules call stack, which begins with '    at'.
     message = err.stack.replace(/    at[^]*/, '').trim();
   }
-  log(red('ERROR:'), message, '\n');
-  const reasonMessage = `Could not compile ${cyan(destFilename)}`;
+  console.error(red(message));
   if (continueOnError) {
-    log(red('ERROR:'), reasonMessage);
+    log('Error while compiling', cyan(destFilename));
   } else {
-    const reason = new Error(reasonMessage);
-    reason.showStack = false;
-    new EventEmitter().emit('error', reason);
+    process.exit(1);
   }
 }
 
@@ -708,7 +695,8 @@ module.exports = {
   BABELIFY_GLOBAL_TRANSFORM,
   BABELIFY_PLUGINS,
   bootstrapThirdPartyFrames,
-  compileAllJs,
+  compileAllMinifiedJs,
+  compileAllUnminifiedJs,
   compileCoreRuntime,
   compileJs,
   compileTs,
