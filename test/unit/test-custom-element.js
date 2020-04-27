@@ -117,8 +117,12 @@ describes.realWin('CustomElement', {amp: true}, env => {
         doc.body.appendChild(container);
         chunkInstanceForTesting(env.ampdoc);
 
-        ElementClass = createAmpElementForTesting(win, TestElement);
-        StubElementClass = createAmpElementForTesting(win, ElementStub);
+        ElementClass = createAmpElementForTesting(win, 'amp-test', TestElement);
+        StubElementClass = createAmpElementForTesting(
+          win,
+          'amp-stub',
+          ElementStub
+        );
 
         win.customElements.define('amp-test', ElementClass);
         win.customElements.define('amp-stub', StubElementClass);
@@ -1664,7 +1668,11 @@ describes.realWin('CustomElement Service Elements', {amp: true}, env => {
   beforeEach(() => {
     win = env.win;
     doc = win.document;
-    StubElementClass = createAmpElementForTesting(win, ElementStub);
+    StubElementClass = createAmpElementForTesting(
+      win,
+      'amp-stub2',
+      ElementStub
+    );
     win.customElements.define('amp-stub2', StubElementClass);
     env.ampdoc.declareExtension('amp-stub2');
     element = new StubElementClass();
@@ -1825,7 +1833,11 @@ describes.realWin('CustomElement', {amp: true}, env => {
         win = env.win;
         doc = win.document;
         clock = lolex.install({target: win});
-        ElementClass = createAmpElementForTesting(win, TestElement);
+        ElementClass = createAmpElementForTesting(
+          win,
+          'amp-test-loader',
+          TestElement
+        );
         win.customElements.define('amp-test-loader', ElementClass);
         win.__AMP_EXTENDED_ELEMENTS['amp-test-loader'] = TestElement;
         LOADING_ELEMENTS_['amp-test-loader'.toUpperCase()] = true;
@@ -2198,7 +2210,11 @@ describes.realWin('CustomElement Overflow Element', {amp: true}, env => {
   beforeEach(() => {
     win = env.win;
     doc = win.document;
-    ElementClass = createAmpElementForTesting(win, TestElement);
+    ElementClass = createAmpElementForTesting(
+      win,
+      'amp-test-overflow',
+      TestElement
+    );
     win.customElements.define('amp-test-overflow', ElementClass);
     mutator = Services.mutatorForDoc(doc);
     mutatorMock = env.sandbox.mock(mutator);

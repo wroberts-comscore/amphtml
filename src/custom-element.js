@@ -84,15 +84,30 @@ function isTemplateTagSupported() {
  * Creates a named custom element class.
  *
  * @param {!Window} win The window in which to register the custom element.
+ * @param {string} name The name of the custom element.
  * @return {typeof AmpElement} The custom element class.
  */
-export function createCustomElementClass(win) {
-  const BaseCustomElement = /** @type {typeof HTMLElement} */ (createBaseCustomElementClass(
+export function createCustomElementClass(win, name) {
+  const baseCustomElement = /** @type {typeof HTMLElement} */ (createBaseCustomElementClass(
     win
   ));
-  // It's necessary to create a subclass, because the same "base" class cannot
-  // be registered to multiple custom elements.
-  class CustomAmpElement extends BaseCustomElement {}
+  class CustomAmpElement extends baseCustomElement {
+    /**
+     * @see https://github.com/WebReflection/document-register-element#v1-caveat
+     * @suppress {checkTypes}
+     * @param {HTMLElement} self
+     */
+    constructor(self) {
+      return super(self);
+    }
+    /**
+     * The name of the custom element.
+     * @return {string}
+     */
+    elementName() {
+      return name;
+    }
+  }
   return /** @type {typeof AmpElement} */ (CustomAmpElement);
 }
 
@@ -112,10 +127,15 @@ function createBaseCustomElementClass(win) {
    * @abstract @extends {HTMLElement}
    */
   class BaseCustomElement extends htmlElement {
-    /** */
-    constructor() {
-      super();
-      this.createdCallback();
+    /**
+     * @see https://github.com/WebReflection/document-register-element#v1-caveat
+     * @suppress {checkTypes}
+     * @param {HTMLElement} self
+     */
+    constructor(self) {
+      self = super(self);
+      self.createdCallback();
+      return self;
     }
 
     /**
@@ -231,7 +251,7 @@ function createBaseCustomElementClass(win) {
       // `opt_implementationClass` is only used for tests.
       let Ctor =
         win.__AMP_EXTENDED_ELEMENTS &&
-        win.__AMP_EXTENDED_ELEMENTS[this.localName];
+        win.__AMP_EXTENDED_ELEMENTS[this.elementName()];
       if (getMode().test && nonStructThis['implementationClassForTesting']) {
         Ctor = nonStructThis['implementationClassForTesting'];
       }
@@ -286,6 +306,13 @@ function createBaseCustomElementClass(win) {
         delete nonStructThis[dom.UPGRADE_TO_CUSTOMELEMENT_PROMISE];
       }
     }
+
+    /**
+     * The name of the custom element.
+     * @abstract
+     * @return {string}
+     */
+    elementName() {}
 
     /** @return {!Signals} */
     signals() {
@@ -1893,11 +1920,12 @@ function isInternalOrServiceNode(node) {
  * Creates a new custom element class prototype.
  *
  * @param {!Window} win The window in which to register the custom element.
+ * @param {string} name The name of the custom element.
  * @param {(typeof ./base-element.BaseElement)=} opt_implementationClass For testing only.
  * @return {!Object} Prototype of element.
  */
-export function createAmpElementForTesting(win, opt_implementationClass) {
-  const Element = createCustomElementClass(win);
+export function createAmpElementForTesting(win, name, opt_implementationClass) {
+  const Element = createCustomElementClass(win, name);
   if (getMode().test && opt_implementationClass) {
     Element.prototype.implementationClassForTesting = opt_implementationClass;
   }

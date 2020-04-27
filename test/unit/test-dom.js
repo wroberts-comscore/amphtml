@@ -1277,7 +1277,7 @@ describes.realWin(
         env.win.setTimeout(() => {
           env.win.customElements.define(
             'amp-test',
-            createAmpElementForTesting(env.win, TestElement)
+            createAmpElementForTesting(env.win, 'amp-test', TestElement)
           );
         }, 100);
         return dom.whenUpgradedToCustomElement(element).then(element => {

@@ -33,7 +33,7 @@ describes.realWin('BaseElement', {amp: true}, env => {
     doc = win.document;
     win.customElements.define(
       'amp-test-element',
-      createAmpElementForTesting(win, BaseElement)
+      createAmpElementForTesting(win, 'amp-test-element', BaseElement)
     );
     customElement = doc.createElement('amp-test-element');
     element = new BaseElement(customElement);
